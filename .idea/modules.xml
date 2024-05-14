@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/react-leaflet-project.iml" filepath="$PROJECT_DIR$/.idea/react-leaflet-project.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/react-leaflet-floorplan.iml" filepath="$PROJECT_DIR$/.idea/react-leaflet-floorplan.iml" />
     </modules>
   </component>
 </project>

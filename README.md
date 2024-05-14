@@ -68,3 +68,11 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+
+## 참고 사이트
+- [React 공식문서](https://reactjs.org/)
+- [Leaflet 공식문서](https://leafletjs.com/)
+- [React-Leaflet 공식문서](https://react-leaflet.js.org/)
+- [Leaflet-Geoman 공식문서](https://geoman.io/docs)
+- [Leaflet floorplans Github](https://github.com/anthonyblackham/floorplans)

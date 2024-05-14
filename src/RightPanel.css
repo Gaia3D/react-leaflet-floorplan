@@ -1,0 +1,14 @@
+.right-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 30%; /* right panel is usually wider if left panel is 30% */
+    height: 100%;
+    background-color: #f5f5f5;
+    border-left: 1px solid #e0e0e0; /* border on the left side */
+    box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.1);
+    position: fixed;
+    right: 0;
+    top: 0;
+}
