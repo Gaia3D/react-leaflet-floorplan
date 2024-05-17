@@ -1,16 +1,18 @@
 import {
-    FeatureGroup,
     GeoJSON,
     LayerGroup,
     Polygon,
     Polyline,
     Tooltip,
-    useMap,
-    useMapEvents
+    useMap
 } from "react-leaflet";
+import "@geoman-io/leaflet-geoman-free";
 import React, {useEffect, useState} from "react";
 import './Map.css';
 import RightPanel from "./RightPanel";
+import GridLayer from "./GridLayer";
+import SnapToGrid from "./SnapToGrid";
+import ActiveLayerPanel from "./ActiveLayer";
 
 // LAYER STYLES
 const footprintStyle = {
@@ -171,178 +173,76 @@ const L2Dataset = [
 
 const tooltipOptions = {permanent: true, direction: "center", className: 'tooltipclass'};
 
+const fetchGeoJsonData = async (url, setGeoJsonData) => {
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        setGeoJsonData(data);
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+const polygonEvent = (map, dataset) => {
+    return {
+        mouseover: (e) => {
+            e.target.setStyle(highlight);
+        },
+        mouseout: (e) => {
+            e.target.setStyle(dataset.style);
+        },
+        click: (e) => {
+            map.fitBounds(e.target.getBounds());
+        }
+    }
+}
+
 function Map() {
+
     const map = useMap();
     const [activeLayer, setActiveLayer] = useState('L1');
     const [geoJsonData, setGeoJsonData] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
 
-    const [features, setFeatures] = useState([]);
-
     useEffect(() => {
-
         map.pm.addControls();
         map.pm.setLang("ko");
 
-        // GeoJson 파일을 불러옵니다.
-        fetch('http://localhost:3000/wall_4326_single.geojson')
-            .then(response => response.json())
-            .then(data => {
-                setGeoJsonData(data);
-            })
-            .catch(error => console.error(error));
-
+        fetchGeoJsonData('http://localhost:3000/wall_4326_single.geojson', setGeoJsonData);
     }, [map]);
 
-    const polygonEvent = (dataset) => {
-        return {
-            mouseover: (e) => {
-                e.target.setStyle(highlight);
-            },
-            mouseout: (e) => {
-                e.target.setStyle(dataset.style);
-            },
-            click: (e) => {
-                map.fitBounds(e.target.getBounds());
-            }
-        }
-    }
-
-    const handleClick = (e) => {
-        const { lat, lng } = e.latlng;
-
-        let filename = 'printer_4326.geojson';
-        let originX = 129.4327801076524906;
-        let originY = 35.5199154963992854;
-
-        if (selectedItem === 'desk') {
-            filename = 'desk_4326.geojson';
-            originX = 129.4328747644724160;
-            originY = 35.5199742834149319;
-        } else if (selectedItem === 'chiffonier') {
-            filename = 'chiffonier_4326.geojson';
-            originX = 129.4327103507249319;
-            originY = 35.5198678404523775;
-        }
-
-        // GeoJSON 데이터를 이동시키는 함수
-        const moveGeoJson = (geoJson, latOffset, lngOffset) => {
-            const newGeoJson = JSON.parse(JSON.stringify(geoJson)); // GeoJSON 데이터를 복사합니다.
-
-            newGeoJson.features.map(feature => {
-                feature.geometry.coordinates = feature.geometry.coordinates.map((coords) => {
-                    return [coords[0] - originX + lngOffset, coords[1] - originY + latOffset];
-                });
-                return feature;
-            });
-            return newGeoJson;
-        };
-
-        // 클릭 위치를 기준으로 GeoJSON 데이터를 이동시킵니다.
-        // GeoJson 파일을 불러옵니다.
-        fetch(`http://localhost:3000/${filename}`)
-            .then(response => response.json())
-            .then(data => {
-                const movedGeoJsonData = moveGeoJson(data, lat, lng);
-                //setPrinterData(movedGeoJsonData);
-                let movedFeatures = movedGeoJsonData.features;
-                setFeatures([...features, ...movedFeatures]);
-            })
-            .catch(error => console.error(error));
-    };
-
-    const ClickHandler = ({ onClick }) => {
-        useMapEvents({
-            click: onClick
-        });
-        return null;
-    };
-
-    const onEachFeature = (feature, layer) => {
-      layer.on('click', (event) => {
-          console.log(event);
-      });
-    };
+    const renderLayerGroup = (dataset, isPolygon = false) => (
+        <LayerGroup>
+            {dataset.map((data, idx) => isPolygon ? (
+                <Polygon
+                    key={idx}
+                    positions={data.data}
+                    pathOptions={data.style}
+                    eventHandlers={polygonEvent(map, data)}
+                >
+                    <Tooltip {...tooltipOptions}>{data.title}</Tooltip>
+                </Polygon>
+            ) : (
+                <Polyline
+                    key={idx}
+                    positions={data.data}
+                    pathOptions={data.style}
+                />
+            ))}
+        </LayerGroup>
+    );
 
     return (
         <>
-            {activeLayer === 'L1' && (
-                <LayerGroup>
-                    {L1Dataset.map((dataset, idx) => {
-                        if (dataset.type === 'polyline') {
-                            return <Polyline key={idx} positions={dataset.data} pathOptions={dataset.style}/>
-                        } else if (dataset.type === 'polygon') {
-                            return <Polygon key={idx}
-                                            positions={dataset.data}
-                                            pathOptions={dataset.style}
-                                            eventHandlers={polygonEvent(dataset)}>
-                                <Tooltip {...tooltipOptions}>{dataset.title}</Tooltip>
-                            </Polygon>
-                        } else {
-                            return null;
-                        }
-                    })}
-                </LayerGroup>
+            {activeLayer === 'L1' && renderLayerGroup(L1Dataset, true)}
+            {activeLayer === 'L2' && renderLayerGroup(L2Dataset)}
+            {activeLayer === 'office' && geoJsonData && (
+                <GeoJSON data={geoJsonData} pathOptions={wallStyle} />
             )}
-            {activeLayer === 'L2' && (
-                <LayerGroup>
-                    {L2Dataset.map((dataset, idx) => (
-                        <Polyline key={idx} positions={dataset.data} pathOptions={dataset.style}/>
-                    ))}
-                </LayerGroup>
-            )}
-            {
-                activeLayer === 'office' && (
-                    <GeoJSON data={geoJsonData} pathOptions={wallStyle} onEachFeature={onEachFeature}></GeoJSON>
-                )
-            }
-            {
-                features.length > 0 && (
-                    <FeatureGroup>
-                        {features.map((feature, index) => {
-                            if (feature.geometry.type === "LineString") {
-                                const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-                                return <Polyline key={index} positions={positions} pathOptions={fixtureStyle}/>;
-                            }
-                            return null;
-                        })}
-                    </FeatureGroup>
-                )
-            }
-            {
-                selectedItem && (
-                    <ClickHandler onClick={handleClick}></ClickHandler>
-                )
-            }
-            <div className="leaflet-top" style={{left: "50%"}}>
-                <div className="leaflet-control-layers leaflet-control-layers-expanded leaflet-control">
-                    <label>
-                        <input
-                            type="radio"
-                            value="L1"
-                            checked={activeLayer === 'L1'}
-                            onChange={() => setActiveLayer('L1')}
-                        /> 1층
-                    </label>
-                    <label>
-                        <input
-                            type="radio"
-                            value="L2"
-                            checked={activeLayer === 'L2'}
-                            onChange={() => setActiveLayer('L2')}
-                        /> 2층
-                    </label>
-                    <label>
-                        <input
-                            type="radio"
-                            value="office"
-                            checked={activeLayer === 'office'}
-                            onChange={() => setActiveLayer('office')}
-                        /> 사무동
-                    </label>
-                </div>
-            </div>
-            <RightPanel selectedItem={selectedItem} setSelectedItem={setSelectedItem}/>
+            <ActiveLayerPanel activeLayer={activeLayer} setActiveLayer={setActiveLayer} />
+            <RightPanel selectedItem={selectedItem} setSelectedItem={setSelectedItem} />
+            <GridLayer />
+            <SnapToGrid selectedItem={selectedItem} />
         </>
     );
 }

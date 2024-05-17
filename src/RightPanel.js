@@ -1,35 +1,29 @@
 import React from 'react';
 import './RightPanel.css';
 
+const items = [
+    { value: 'printer', label: '프린터' },
+    { value: 'desk', label: '책상' },
+    { value: 'chiffonier', label: '서랍장' }
+];
+
 const RightPanel = ({ selectedItem, setSelectedItem }) => {
+    const renderRadioButton = (item) => (
+        <label key={item.value}>
+            <input
+                type="radio"
+                value={item.value}
+                checked={selectedItem === item.value}
+                onChange={() => setSelectedItem(item.value)}
+            /> {item.label}
+        </label>
+    );
+
     return (
         <div className="leaflet-right">
             <div className="right-panel leaflet-control-layers leaflet-control-layers-expanded leaflet-control">
                 <h2>배치 아이템</h2>
-                <label>
-                    <input
-                        type="radio"
-                        value="printer"
-                        checked={selectedItem === 'printer'}
-                        onChange={() => setSelectedItem('printer')}
-                    /> 프린터
-                </label>
-                <label>
-                    <input
-                        type="radio"
-                        value="desk"
-                        checked={selectedItem === 'desk'}
-                        onChange={() => setSelectedItem('desk')}
-                    /> 책상
-                </label>
-                <label>
-                    <input
-                        type="radio"
-                        value="chiffonier"
-                        checked={selectedItem === 'chiffonier'}
-                        onChange={() => setSelectedItem('chiffonier')}
-                    /> 서랍장
-                </label>
+                {items.map(renderRadioButton)}
             </div>
         </div>
     );

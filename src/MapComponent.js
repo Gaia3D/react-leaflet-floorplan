@@ -1,20 +1,31 @@
 import React from 'react';
 import {MapContainer, TileLayer} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 import Map from './Map';
-import "@geoman-io/leaflet-geoman-free";
+
+const MAP_SETTINGS = {
+    center: [35.51992, 129.432798],
+    zoom: 18,
+    minZoom: 0,
+    maxZoom: 25,
+    tileLayerUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    style: { height: '100vh', width: '100%', backgroundColor: '#ddd' }
+};
 
 function MapComponent() {
-    const center = [35.51992, 129.432798];
-    const zoom = 18;
-    //const crs = L.CRS.EPSG3857; // 커스텀 CRS 설정
-    const minZoom = 0;
-    const maxZoom = 25;
 
     return (
-        <MapContainer center={center} zoom={zoom} style={{height: '100vh', width: '100%', backgroundColor:'#ddd'}} /*crs={crs}*/ minZoom={minZoom}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={maxZoom}/>
+        <MapContainer
+            center={MAP_SETTINGS.center}
+            zoom={MAP_SETTINGS.zoom}
+            style={MAP_SETTINGS.style}
+            minZoom={MAP_SETTINGS.minZoom}
+            maxZoom={MAP_SETTINGS.maxZoom}
+        >
+            <TileLayer
+                url={MAP_SETTINGS.tileLayerUrl}
+                maxZoom={MAP_SETTINGS.maxZoom}
+            />
             <Map />
         </MapContainer>
     );
