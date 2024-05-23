@@ -30,7 +30,6 @@ const createGrid = () => {
             gridGroup.addLayer(rect);
         }
     }
-
     return gridGroup;
 };
 
@@ -39,9 +38,17 @@ const GridLayer = () => {
 
     useEffect(() => {
         const gridLayer = createGrid();
-        map.addLayer(gridLayer);
+        gridLayer.addTo(map);
+        gridLayer.pm.disable();
+
+        const handleGlobalEditModeToggle = () => {
+            gridLayer.pm.disable();
+        };
+
+        map.on('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
 
         return () => {
+            map.off('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
             map.removeLayer(gridLayer);
         };
     }, [map]);

@@ -7,7 +7,7 @@ const items = [
     { value: 'chiffonier', label: '서랍장' }
 ];
 
-const RightPanel = ({ selectedItem, setSelectedItem }) => {
+const RightPanel = ({selectedItem, setSelectedItem}) => {
     const renderRadioButton = (item) => (
         <label key={item.value}>
             <input
@@ -23,7 +23,9 @@ const RightPanel = ({ selectedItem, setSelectedItem }) => {
         <div className="leaflet-right">
             <div className="right-panel leaflet-control-layers leaflet-control-layers-expanded leaflet-control">
                 <h2>배치 아이템</h2>
-                {items.map(renderRadioButton)}
+                {items.map(item => (
+                    renderRadioButton(item)
+                ))}
             </div>
         </div>
     );

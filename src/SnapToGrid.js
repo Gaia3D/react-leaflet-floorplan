@@ -50,20 +50,22 @@ const SnapToGrid = ({selectedItem}) => {
         const onZoomEnd = (e) => {
             const zoom = e.target.getZoom();
             const markerSize = calculateMarkerSize(zoom);
-            tempMarker.setIcon(
-                L.icon({
-                    iconUrl: 'http://localhost:3000/printer.png',
-                    iconSize: [markerSize * 1.6, markerSize],
-                    iconAnchor: [0, markerSize],
-                })
-            )
+            if (tempMarker) {
+                tempMarker.setIcon(
+                    L.icon({
+                        iconUrl: 'http://localhost:3000/printer.png',
+                        iconSize: [markerSize * 1.6, markerSize],
+                        iconAnchor: [0, markerSize],
+                    })
+                )
+            }
         }
 
-        map.on('mousemove', onMouseMove);
+        //map.on('mousemove', onMouseMove);
         map.on('zoomend', onZoomEnd);
 
         return () => {
-            map.off('mousemove', onMouseMove);
+            //map.off('mousemove', onMouseMove);
             map.off('zoomend', onZoomEnd);
         };
     }, [map, tempMarker]);

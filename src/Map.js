@@ -7,12 +7,14 @@ import {
     useMap
 } from "react-leaflet";
 import "@geoman-io/leaflet-geoman-free";
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import './Map.css';
 import RightPanel from "./RightPanel";
 import GridLayer from "./GridLayer";
 import SnapToGrid from "./SnapToGrid";
 import ActiveLayerPanel from "./ActiveLayer";
+import L from 'leaflet';
+import ReactDOM from 'react-dom/client';
 
 // LAYER STYLES
 const footprintStyle = {
@@ -197,51 +199,163 @@ const polygonEvent = (map, dataset) => {
     }
 }
 
+const CustomPopup = ({ feature }) => {
+
+    const [name, setName] = useState('');
+    const handleChange = (e) => {
+        setName(e.target.value);
+    }
+    const handleButtonClick = () => {
+        console.info(feature);
+    };
+
+    return (
+        <div>
+            <h2>Feature Info</h2>
+            <p>{feature && feature.pm._shape}</p>
+            <p>Coordinates: {feature && (feature.getLatLngs ? feature.getLatLngs().toString() : feature.getLatLng().toString())}</p>
+            <input type="text" name="name" value={name} onChange={handleChange}/>
+            <button type="button" onClick={handleButtonClick}>저장</button>
+        </div>
+    );
+}
+
 function Map() {
 
     const map = useMap();
     const [activeLayer, setActiveLayer] = useState('L1');
-    const [geoJsonData, setGeoJsonData] = useState(null);
+    const [selectedRoom, setSelectedRoom] = useState(null);
+    const [wallOuterData, setWallOuterData] = useState(null);
+    const [wallInnerData, setWalInnerData] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
+
+    const [name, setName] = useState("");
+    const [features, setFeatures] = useState([]);
 
     useEffect(() => {
         map.pm.addControls();
         map.pm.setLang("ko");
 
-        fetchGeoJsonData('http://localhost:3000/wall_4326_single.geojson', setGeoJsonData);
+        fetchGeoJsonData('http://localhost:3000/wall_outer.geojson', setWallOuterData);
+        fetchGeoJsonData('http://localhost:3000/wall_inner.geojson', setWalInnerData);
+
+        let currentFeatures = [];
+
+        const updateFeatures = (e) => {
+            const layer = e.layer;
+            currentFeatures.push(layer.toGeoJSON());
+            setFeatures([...currentFeatures]);
+
+            const popupNode = document.createElement('div');
+            const root = ReactDOM.createRoot(popupNode);
+            root.render(<CustomPopup feature={layer} />);
+
+            // const root = createRoot(popupNode);
+            // root.render(<PopupContent feature={layer} />);
+            layer.bindPopup(popupNode).openPopup();
+        }
+
+        map.on('pm:create', updateFeatures);
+
+        // 컴포넌트가 언마운트 될 때 이벤트 리스너 제거
+        return () => {
+            map.off('pm:create', updateFeatures);
+        };
+
     }, [map]);
 
-    const renderLayerGroup = (dataset, isPolygon = false) => (
+    function snapToGrid(latlng) {
+        const lat = latlng.lat;
+        const lng = latlng.lng;
+        const step = 0.000045 / 5; // 1m
+
+        const snappedLat = Math.round(lat / step) * step;
+        const snappedLng = Math.round(lng / step) * step;
+
+        return L.latLng(snappedLat, snappedLng);
+    }
+
+    useEffect(() => {
+        if (activeLayer === 'office' && wallOuterData && wallInnerData) {
+            const wallOuterLayer = L.geoJSON(wallOuterData, {
+                style: wallStyle
+            }).addTo(map);
+
+            const wallInnerLayer = L.geoJSON(wallInnerData, {
+                style: wallStyle
+            }).addTo(map);
+
+            wallOuterLayer.pm.disable(); // Disable editing
+            const handleGlobalEditModeToggle = () => {
+                wallOuterLayer.pm.disable();
+                wallInnerLayer.pm.enable({ snappable: true });
+            };
+
+            const onDrag = (e, layer) => {
+
+                const latLngs = e.target.getLatLngs();
+
+                const startPoint = new L.LatLng(e.latlng.lat, latLngs[0].lng);
+                const endPoint = new L.LatLng(e.latlng.lat, latLngs[1].lng);
+
+                layer.setLatLngs([startPoint, endPoint]);
+            };
+
+            const onDragEnd = (e, layer) => {
+                const newLatLngs = e.target.getLatLngs();
+                layer.setLatLngs([newLatLngs[0], newLatLngs[1]]);
+            };
+
+            const handleGlobalDragModeToggle = () => {
+                wallInnerLayer.eachLayer(layer => {
+                    layer.on('pm:drag', (e) => onDrag(e, layer));
+                    layer.on('pm:dragend', (e) => onDragEnd(e, layer));
+                })
+            };
+
+            map.on('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
+            map.on('pm:globaldragmodetoggled', handleGlobalDragModeToggle);
+
+            return () => {
+                map.off('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
+                map.off('pm:globaldragmodetoggled', handleGlobalDragModeToggle);
+                map.removeLayer(wallOuterLayer);
+                map.removeLayer(wallInnerLayer);
+            }
+        }
+    }, [activeLayer, wallOuterData, wallInnerData, map]);
+
+    const renderLayerGroup = (dataset) => (
         <LayerGroup>
-            {dataset.map((data, idx) => isPolygon ? (
-                <Polygon
-                    key={idx}
-                    positions={data.data}
-                    pathOptions={data.style}
-                    eventHandlers={polygonEvent(map, data)}
-                >
-                    <Tooltip {...tooltipOptions}>{data.title}</Tooltip>
-                </Polygon>
-            ) : (
-                <Polyline
-                    key={idx}
-                    positions={data.data}
-                    pathOptions={data.style}
-                />
-            ))}
+            {dataset.map((data, idx) => {
+                if (data.type === 'polygon') {
+                        return (<Polygon
+                            key={idx}
+                            positions={data.data}
+                            pathOptions={data.style}
+                            eventHandlers={polygonEvent(map, data)}
+                        >
+                            <Tooltip {...tooltipOptions}>{data.title}</Tooltip>
+                        </Polygon>)
+
+                } else {
+                    return (<Polyline
+                        key={idx}
+                        positions={data.data}
+                        pathOptions={data.style}
+                    />)
+                }
+            })}
         </LayerGroup>
     );
 
     return (
         <>
-            {activeLayer === 'L1' && renderLayerGroup(L1Dataset, true)}
+            {activeLayer === 'L1' && renderLayerGroup(L1Dataset)}
             {activeLayer === 'L2' && renderLayerGroup(L2Dataset)}
-            {activeLayer === 'office' && geoJsonData && (
-                <GeoJSON data={geoJsonData} pathOptions={wallStyle} />
-            )}
+            {selectedRoom && <GridLayer />}
             <ActiveLayerPanel activeLayer={activeLayer} setActiveLayer={setActiveLayer} />
             <RightPanel selectedItem={selectedItem} setSelectedItem={setSelectedItem} />
-            <GridLayer />
             <SnapToGrid selectedItem={selectedItem} />
         </>
     );
