@@ -15,20 +15,25 @@ const calculateMarkerSize = (zoom) => {
     return baseSize;
 };
 
-const SnapToGrid = ({selectedItem}) => {
+const SnapToGrid = ({selectedItem, layer}) => {
 
     const map = useMap();
+    const bounds = layer.getBounds();
     const [features, setFeatures] = useState([]);
     const [tempMarker, setTempMarker] = useState(null);
 
     useEffect(() => {
 
+        const gridSize = 1;
+
+        const latStep = gridSize / 111320; // 1미터 간격 (위도)
+        const lngStep = gridSize / (40075000 * Math.cos((bounds.getNorth() + bounds.getSouth()) / 2 * Math.PI / 180) / 360); // 1미터 간격 (경도)
+
         const onMouseMove = (e) => {
             const { lat, lng } = e.latlng;
-            const step = 0.000045 / 5; // 1m
 
-            const snappedLat = Math.round(lat / step) * step;
-            const snappedLng = Math.round(lng / step) * step;
+            const snappedLat = Math.round(lat / latStep) * latStep;
+            const snappedLng = Math.round(lng / lngStep) * lngStep;
 
             if (tempMarker) {
                 tempMarker.setLatLng([snappedLat, snappedLng]);
@@ -61,14 +66,14 @@ const SnapToGrid = ({selectedItem}) => {
             }
         }
 
-        //map.on('mousemove', onMouseMove);
+        map.on('mousemove', onMouseMove);
         map.on('zoomend', onZoomEnd);
 
         return () => {
-            //map.off('mousemove', onMouseMove);
+            map.off('mousemove', onMouseMove);
             map.off('zoomend', onZoomEnd);
         };
-    }, [map, tempMarker]);
+    }, [map, tempMarker, bounds]);
 
     const moveGeoJson = (geoJson, latOffset, lngOffset, originX, originY) => {
         const newGeoJson = JSON.parse(JSON.stringify(geoJson));
@@ -86,10 +91,13 @@ const SnapToGrid = ({selectedItem}) => {
         if (!selectedItem) return;
 
         const { lat, lng } = e.latlng;
-        const step = 0.000045 / 5; // 5m
 
-        const snappedLat = Math.round(lat / step) * step;
-        const snappedLng = Math.round(lng / step) * step;
+        const gridSize = 1;
+        const latStep = gridSize / 111320; // 1미터 간격 (위도)
+        const lngStep = gridSize / (40075000 * Math.cos((bounds.getNorth() + bounds.getSouth()) / 2 * Math.PI / 180) / 360); // 1미터 간격 (경도)
+
+        const snappedLat = Math.round(lat / latStep) * latStep;
+        const snappedLng = Math.round(lng / lngStep) * lngStep;
 
         let filename = 'printer_4326.geojson';
         let originX = 129.4327801076524906;

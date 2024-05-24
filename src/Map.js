@@ -1,5 +1,5 @@
 import {
-    GeoJSON,
+    FeatureGroup,
     LayerGroup,
     Polygon,
     Polyline,
@@ -7,7 +7,7 @@ import {
     useMap
 } from "react-leaflet";
 import "@geoman-io/leaflet-geoman-free";
-import React, {useEffect, useRef, useState} from "react";
+import React, {useEffect, useState} from "react";
 import './Map.css';
 import RightPanel from "./RightPanel";
 import GridLayer from "./GridLayer";
@@ -33,7 +33,7 @@ const roomStyle = {
     color: 'black',
     opacity: 0,
     fillColor: 'white',
-    fillOpacity: 0.1
+    fillOpacity: .5,
 };
 
 const wallStyle = {
@@ -199,14 +199,34 @@ const polygonEvent = (map, dataset) => {
     }
 }
 
-const CustomPopup = ({ feature }) => {
+const roomPolygonEvent = (map, setIsSelectedRoom, setSelectedFeature) => {
+    return {
+        mouseover: (e) => {
+            e.target.setStyle(highlight);
+        },
+        mouseout: (e) => {
+            e.target.setStyle(roomStyle);
+        },
+        click: (e) => {
+            map.fitBounds(e.target.getBounds());
+            setIsSelectedRoom(true);
+            setSelectedFeature(e.target);
+        }
+    }
+}
+
+const CustomPopup = ({ feature, currentFeatures, setFeatures, map }) => {
 
     const [name, setName] = useState('');
     const handleChange = (e) => {
         setName(e.target.value);
     }
     const handleButtonClick = () => {
-        console.info(feature);
+        let json = feature.toGeoJSON();
+        json.properties.title = name;
+        currentFeatures.push(json);
+        setFeatures([...currentFeatures]);
+        map.removeLayer(feature);
     };
 
     return (
@@ -224,13 +244,12 @@ function Map() {
 
     const map = useMap();
     const [activeLayer, setActiveLayer] = useState('L1');
-    const [selectedRoom, setSelectedRoom] = useState(null);
+    const [isSelectedRoom, setIsSelectedRoom ] = useState(false);
     const [wallOuterData, setWallOuterData] = useState(null);
     const [wallInnerData, setWalInnerData] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
-
-    const [name, setName] = useState("");
     const [features, setFeatures] = useState([]);
+    const [selectedFeature, setSelectedFeature] = useState(null);
 
     useEffect(() => {
         map.pm.addControls();
@@ -243,12 +262,12 @@ function Map() {
 
         const updateFeatures = (e) => {
             const layer = e.layer;
-            currentFeatures.push(layer.toGeoJSON());
-            setFeatures([...currentFeatures]);
+            //currentFeatures.push(layer.toGeoJSON());
+            //setFeatures([...currentFeatures]);
 
             const popupNode = document.createElement('div');
             const root = ReactDOM.createRoot(popupNode);
-            root.render(<CustomPopup feature={layer} />);
+            root.render(<CustomPopup feature={layer} currentFeatures={currentFeatures} setFeatures={setFeatures} map={map} />);
 
             // const root = createRoot(popupNode);
             // root.render(<PopupContent feature={layer} />);
@@ -263,17 +282,6 @@ function Map() {
         };
 
     }, [map]);
-
-    function snapToGrid(latlng) {
-        const lat = latlng.lat;
-        const lng = latlng.lng;
-        const step = 0.000045 / 5; // 1m
-
-        const snappedLat = Math.round(lat / step) * step;
-        const snappedLng = Math.round(lng / step) * step;
-
-        return L.latLng(snappedLat, snappedLng);
-    }
 
     useEffect(() => {
         if (activeLayer === 'office' && wallOuterData && wallInnerData) {
@@ -292,12 +300,9 @@ function Map() {
             };
 
             const onDrag = (e, layer) => {
-
                 const latLngs = e.target.getLatLngs();
-
                 const startPoint = new L.LatLng(e.latlng.lat, latLngs[0].lng);
                 const endPoint = new L.LatLng(e.latlng.lat, latLngs[1].lng);
-
                 layer.setLatLngs([startPoint, endPoint]);
             };
 
@@ -353,10 +358,33 @@ function Map() {
         <>
             {activeLayer === 'L1' && renderLayerGroup(L1Dataset)}
             {activeLayer === 'L2' && renderLayerGroup(L2Dataset)}
-            {selectedRoom && <GridLayer />}
+            {isSelectedRoom && <GridLayer layer={selectedFeature} outer={wallOuterData} inner={wallInnerData} />}
             <ActiveLayerPanel activeLayer={activeLayer} setActiveLayer={setActiveLayer} />
             <RightPanel selectedItem={selectedItem} setSelectedItem={setSelectedItem} />
-            <SnapToGrid selectedItem={selectedItem} />
+            {
+                selectedItem && selectedFeature &&
+                <SnapToGrid selectedItem={selectedItem} layer={selectedFeature} />
+            }
+            {
+                features.length > 0 && (
+                    <FeatureGroup>
+                        {features.map((feature, index) => {
+                            if (feature.geometry.type === "Polygon") {
+                                const positions = feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+                                return <Polygon
+                                    key={index}
+                                    positions={positions}
+                                    pathOptions={roomStyle}
+                                    eventHandlers={roomPolygonEvent(map, setIsSelectedRoom, setSelectedFeature)}
+                                >
+                                    <Tooltip {...tooltipOptions}>{feature.properties.title}</Tooltip>
+                                </Polygon>;
+                            }
+                            return null;
+                        })}
+                    </FeatureGroup>
+                )
+            }
         </>
     );
 }

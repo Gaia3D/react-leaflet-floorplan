@@ -1,9 +1,17 @@
 import {useMap} from "react-leaflet";
 import {useEffect} from "react";
 import L from 'leaflet';
-import {LatLng} from "leaflet/src/geo";
+import * as turf from '@turf/turf';
 
 const gridStyle = {
+    color: 'green',
+    opacity: 0.5,
+    fillColor: 'green',
+    fillOpacity: 0.15,
+    weight: 1,
+};
+
+const disabledGridStyle = {
     color: 'red',
     opacity: 0.5,
     fillColor: 'red',
@@ -11,19 +19,24 @@ const gridStyle = {
     weight: 1,
 };
 
-const createGrid = () => {
-    const southWest = new LatLng(35.519722, 129.432778);
-    const northEast = new LatLng(35.520000, 129.433056);
+const createGrid = (gridSize, bounds) => {
+
     const gridGroup = L.layerGroup();
 
-    const step = 0.000045 / 5; // 약 1m
+    const startLat = bounds.getSouth();
+    const endLat = bounds.getNorth();
+    const startLng = bounds.getWest();
+    const endLng = bounds.getEast();
 
-    for (let lat = southWest.lat; lat < northEast.lat; lat += step) {
-        for (let lng = southWest.lng; lng < northEast.lng; lng += step) {
+    const latStep = gridSize / 111320; // 1미터 간격 (위도)
+    const lngStep = gridSize / (40075000 * Math.cos((endLat + startLat) / 2 * Math.PI / 180) / 360); // 1미터 간격 (경도)
+
+    for (let lat = startLat; lat <= endLat; lat += latStep) {
+        for (let lng = startLng; lng <= endLng; lng += lngStep) {
             const rect = L.rectangle(
                 [
                     [lat, lng],
-                    [lat + step, lng + step],
+                    [lat + latStep, lng + lngStep],
                 ],
                 gridStyle
             );
@@ -33,13 +46,64 @@ const createGrid = () => {
     return gridGroup;
 };
 
-const GridLayer = () => {
+const GridLayer = ({ layer, outer, inner }) => {
+
+    const bounds = layer.getBounds();
     const map = useMap();
 
     useEffect(() => {
-        const gridLayer = createGrid();
+        const gridSize = 1;
+        const gridLayer = createGrid(gridSize, bounds);
         gridLayer.addTo(map);
         gridLayer.pm.disable();
+
+        const outerMultiLineString = turf.multiLineString(outer.features.map((feature) => {
+            return feature.geometry.coordinates;
+        }));
+
+        const innerMultiLineString = turf.multiLineString(inner.features.map((feature) => {
+            return feature.geometry.coordinates;
+        }));
+
+        const convertMultiLineStringToLineStrings = (multiLineString) => {
+            const { coordinates } = multiLineString.geometry;
+            return coordinates.map(coords => turf.lineString(coords));
+        };
+        const outerLineStrings = convertMultiLineStringToLineStrings(outerMultiLineString);
+        const innerLineStrings = convertMultiLineStringToLineStrings(innerMultiLineString);
+
+        gridLayer.eachLayer((grid) => {
+            const gridBounds = grid.getBounds();
+            const gridPolygon = turf.polygon([
+                [
+                    [gridBounds.getWest(), gridBounds.getSouth()],
+                    [gridBounds.getWest(), gridBounds.getNorth()],
+                    [gridBounds.getEast(), gridBounds.getNorth()],
+                    [gridBounds.getEast(), gridBounds.getSouth()],
+                    [gridBounds.getWest(), gridBounds.getSouth()],
+                ],
+            ]);
+
+            outerLineStrings.forEach((lineString) => {
+                const intersect = turf.lineIntersect(lineString, gridPolygon);
+                if (intersect.features.length > 0) {
+                    grid.setStyle(disabledGridStyle);
+                }
+            });
+
+            innerLineStrings.forEach((lineString) => {
+                const intersect = turf.lineIntersect(lineString, gridPolygon);
+                if (intersect.features.length > 0) {
+                    grid.setStyle(disabledGridStyle);
+                }
+            });
+
+            /*
+            if (intersect.features.length > 0) {
+                grid.setStyle(disabledGridStyle);
+            }
+            */
+        });
 
         const handleGlobalEditModeToggle = () => {
             gridLayer.pm.disable();
@@ -51,7 +115,8 @@ const GridLayer = () => {
             map.off('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
             map.removeLayer(gridLayer);
         };
-    }, [map]);
+
+    }, [outer, inner, bounds, map]);
 
     return null;
 };
