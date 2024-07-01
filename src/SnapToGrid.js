@@ -1,6 +1,8 @@
 import {FeatureGroup, Polyline, useMap, useMapEvents} from "react-leaflet";
 import L from 'leaflet';
 import React, {useEffect, useState} from "react";
+import {useRecoilValue, useSetRecoilState} from "recoil";
+import {addedFeatureState, placedItemState} from "./recoil/common";
 
 const fixtureStyle = {
     color: 'black',
@@ -8,44 +10,81 @@ const fixtureStyle = {
     opacity: .5,
 };
 
-const calculateMarkerSize = (zoom) => {
-    let baseSize = 3.5; // 기본 마커 크기
+const calculateMarkerSize = (zoom, item) => {
+    // 기본 마커 크기
+    let baseSize = 3.5
+    if (item === "desk") {
+        baseSize = 6
+    } else if (item === "chiffonier") {
+        baseSize = 2
+    }
+
     // 줌 레벨에 따라 크기 조절
     baseSize = baseSize * Math.pow(2, zoom - 18);
     return baseSize;
 };
 
-const SnapToGrid = ({selectedItem, layer}) => {
+const calculateIconSizeAndAnchor = (zoom, selectedItem) => {
+    const markerSize = calculateMarkerSize(zoom, selectedItem);
+    let iconSize = [markerSize * 1.6, markerSize]
+    let iconAnchor = [0, markerSize]
 
+    if (selectedItem === "desk") {
+        iconSize = [markerSize, markerSize * 1.6];
+        iconAnchor = [0, markerSize * 1.6];
+    }
+
+    return {iconSize, iconAnchor};
+};
+
+const SnapToGrid = ({
+                        selectedItem,
+                        layer,
+                        nowSelectedRoomFeature
+                    }) => {
     const map = useMap();
     const bounds = layer.getBounds();
-    const [features, setFeatures] = useState([]);
     const [tempMarker, setTempMarker] = useState(null);
 
-    useEffect(() => {
 
+    const setAddedFeature = useSetRecoilState(addedFeatureState)
+    const placedItem = useRecoilValue(placedItemState)
+
+    useEffect(() => {
+        if (selectedItem === "noItem") {
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+                setTempMarker(null);
+            }
+            return
+        }
         const gridSize = 1;
 
         const latStep = gridSize / 111320; // 1미터 간격 (위도)
         const lngStep = gridSize / (40075000 * Math.cos((bounds.getNorth() + bounds.getSouth()) / 2 * Math.PI / 180) / 360); // 1미터 간격 (경도)
 
+        const zoom = map.getZoom();
+        const {iconSize, iconAnchor} = calculateIconSizeAndAnchor(zoom, selectedItem)
+        const markerIcon = L.icon({
+            iconUrl: `http://localhost:3000/${selectedItem}.png`,
+            iconSize: iconSize,
+            iconAnchor: iconAnchor,
+        })
+
         const onMouseMove = (e) => {
-            const { lat, lng } = e.latlng;
+            const {lat, lng} = e.latlng;
 
             const snappedLat = Math.round(lat / latStep) * latStep;
             const snappedLng = Math.round(lng / lngStep) * lngStep;
 
             if (tempMarker) {
                 tempMarker.setLatLng([snappedLat, snappedLng]);
+                tempMarker.setIcon(
+                    markerIcon
+                )
             } else {
-                const zoom = map.getZoom();
-                const markerSize = calculateMarkerSize(zoom);
                 const marker = L.marker([snappedLat, snappedLng], {
-                    icon: L.icon({
-                        iconUrl: 'http://localhost:3000/printer.png',
-                        iconSize: [markerSize * 1.6, markerSize],
-                        iconAnchor: [0, markerSize],
-                    }),
+                    icon: markerIcon,
                     opacity: 0.5,
                 }).addTo(map);
                 setTempMarker(marker);
@@ -53,27 +92,20 @@ const SnapToGrid = ({selectedItem, layer}) => {
         };
 
         const onZoomEnd = (e) => {
-            const zoom = e.target.getZoom();
-            const markerSize = calculateMarkerSize(zoom);
             if (tempMarker) {
-                tempMarker.setIcon(
-                    L.icon({
-                        iconUrl: 'http://localhost:3000/printer.png',
-                        iconSize: [markerSize * 1.6, markerSize],
-                        iconAnchor: [0, markerSize],
-                    })
-                )
+                tempMarker.setIcon(markerIcon)
             }
         }
 
         map.on('mousemove', onMouseMove);
         map.on('zoomend', onZoomEnd);
 
+
         return () => {
             map.off('mousemove', onMouseMove);
             map.off('zoomend', onZoomEnd);
         };
-    }, [map, tempMarker, bounds]);
+    }, [map, tempMarker, bounds, selectedItem]);
 
     const moveGeoJson = (geoJson, latOffset, lngOffset, originX, originY) => {
         const newGeoJson = JSON.parse(JSON.stringify(geoJson));
@@ -83,14 +115,14 @@ const SnapToGrid = ({selectedItem, layer}) => {
             });
             return feature;
         });
+
         return newGeoJson;
     };
 
     const onMouseClick = (e) => {
+        if (selectedItem === "noItem") return
 
-        if (!selectedItem) return;
-
-        const { lat, lng } = e.latlng;
+        const {lat, lng} = e.latlng;
 
         const gridSize = 1;
         const latStep = gridSize / 111320; // 1미터 간격 (위도)
@@ -120,10 +152,16 @@ const SnapToGrid = ({selectedItem, layer}) => {
             .then(data => {
                 const movedGeoJsonData = moveGeoJson(data, snappedLat, snappedLng, originX, originY);
                 let movedFeatures = movedGeoJsonData.features;
-                setFeatures([...features, ...movedFeatures]);
+                const nowRoom = nowSelectedRoomFeature.options.children.props.children
+                const movedFeaturesCollection = {
+                    "type": "FeatureCollection",
+                    "name": selectedItem,
+                    "features": movedFeatures,
+                    "room": nowRoom
+                }
+                setAddedFeature(movedFeaturesCollection)
             })
             .catch(error => console.error(error));
-
     };
 
     useMapEvents({
@@ -133,15 +171,18 @@ const SnapToGrid = ({selectedItem, layer}) => {
     return (
         <>
             {
-                features.length > 0 && (
+                placedItem.length > 0 && (
                     <FeatureGroup>
-                        {features.map((feature, index) => {
-                            if (feature.geometry.type === "LineString") {
-                                const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-                                return <Polyline key={index} positions={positions} pathOptions={fixtureStyle}/>;
-                            }
-                            return null;
-                        })}
+                        {placedItem.flatMap((featureCollection, collectionIndex) =>
+                            featureCollection.features.map((feature, featureIndex) => {
+                                if (feature.geometry.type === "LineString") {
+                                    const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                                    return <Polyline key={`${collectionIndex}-${featureIndex}`} positions={positions}
+                                                     pathOptions={fixtureStyle}/>;
+                                }
+                                return null;
+                            })
+                        )}
                     </FeatureGroup>
                 )
             }

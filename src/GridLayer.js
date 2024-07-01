@@ -1,26 +1,19 @@
 import {useMap} from "react-leaflet";
-import {useEffect} from "react";
+import {useEffect, useRef, useState} from "react";
 import L from 'leaflet';
 import * as turf from '@turf/turf';
+import {useRecoilState} from "recoil";
+import {addedFeatureState, itemFeatureCollectionsState, placedItemState} from "./recoil/common";
 
 const gridStyle = {
-    color: 'green',
-    opacity: 0.5,
-    fillColor: 'green',
-    fillOpacity: 0.15,
-    weight: 1,
+    color: 'green', opacity: 0.5, fillColor: 'green', fillOpacity: 0.15, weight: 1,
 };
 
 const disabledGridStyle = {
-    color: 'red',
-    opacity: 0.5,
-    fillColor: 'red',
-    fillOpacity: 0.15,
-    weight: 1,
+    color: 'red', opacity: 0.5, fillColor: 'red', fillOpacity: 0.15, weight: 1,
 };
 
 const createGrid = (gridSize, bounds) => {
-
     const gridGroup = L.layerGroup();
 
     const startLat = bounds.getSouth();
@@ -33,29 +26,52 @@ const createGrid = (gridSize, bounds) => {
 
     for (let lat = startLat; lat <= endLat; lat += latStep) {
         for (let lng = startLng; lng <= endLng; lng += lngStep) {
-            const rect = L.rectangle(
-                [
-                    [lat, lng],
-                    [lat + latStep, lng + lngStep],
-                ],
-                gridStyle
-            );
+            const rect = L.rectangle([[lat, lng], [lat + latStep, lng + lngStep],], gridStyle);
             gridGroup.addLayer(rect);
         }
     }
     return gridGroup;
 };
 
-const GridLayer = ({ layer, outer, inner }) => {
+const convertMultiLineStringToLineStrings = (multiLineString) => {
+    const {coordinates} = multiLineString.geometry;
+    return coordinates.map(coords => turf.lineString(coords));
+};
 
-    const bounds = layer.getBounds();
+const getGridPolygon = (grid) => {
+    const gridBounds = grid.getBounds();
+    const gridPolygon = turf.polygon([[[gridBounds.getWest(), gridBounds.getSouth()], [gridBounds.getWest(), gridBounds.getNorth()], [gridBounds.getEast(), gridBounds.getNorth()], [gridBounds.getEast(), gridBounds.getSouth()], [gridBounds.getWest(), gridBounds.getSouth()],],]);
+
+    return gridPolygon
+}
+
+const checkInterSectionAndSetStyle = (grid, gridPolygon, lineStrings) => {
+    lineStrings.forEach((lineString) => {
+        const intersect = turf.lineIntersect(lineString, gridPolygon);
+        if (intersect.features.length > 0) {
+            grid.setStyle(disabledGridStyle);
+        }
+    })
+}
+
+const GridLayer = ({layer, outer, inner}) => {
+    const bounds = layer?.getBounds();
     const map = useMap();
 
+    const [gridLayer, setGridLayer] = useState(null)
+    const [itemFeatureCollections, setItemFeatureCollections] = useRecoilState(itemFeatureCollectionsState)
+    const [addedFeature, setAddedFeature] = useRecoilState(addedFeatureState)
+    const [placedItem, setPlacedItem] = useRecoilState(placedItemState)
+
+
+    // grid 생성, 외벽 내벽 intersect
     useEffect(() => {
+        if (!bounds) return;
+
         const gridSize = 1;
-        const gridLayer = createGrid(gridSize, bounds);
-        gridLayer.addTo(map);
-        gridLayer.pm.disable();
+        const newGridLayer = createGrid(gridSize, bounds);
+        newGridLayer.addTo(map);
+        newGridLayer.pm.disable();
 
         const outerMultiLineString = turf.multiLineString(outer.features.map((feature) => {
             return feature.geometry.coordinates;
@@ -65,45 +81,88 @@ const GridLayer = ({ layer, outer, inner }) => {
             return feature.geometry.coordinates;
         }));
 
-        const convertMultiLineStringToLineStrings = (multiLineString) => {
-            const { coordinates } = multiLineString.geometry;
-            return coordinates.map(coords => turf.lineString(coords));
-        };
         const outerLineStrings = convertMultiLineStringToLineStrings(outerMultiLineString);
         const innerLineStrings = convertMultiLineStringToLineStrings(innerMultiLineString);
 
+        //건물 외벽, 내벽과 grid intersect
+        newGridLayer.eachLayer((grid) => {
+            const gridPolygon = getGridPolygon(grid)
+            checkInterSectionAndSetStyle(grid, gridPolygon, outerLineStrings)
+            checkInterSectionAndSetStyle(grid, gridPolygon, innerLineStrings)
+        })
+
+        setGridLayer(newGridLayer);
+
+        return () => {
+            map.removeLayer(newGridLayer)
+        }
+
+    }, [outer, inner, bounds]);
+
+
+    // feature 추가될 때 마다 검증, 추가
+    useEffect(() => {
+        if (!gridLayer || !addedFeature) return
+
+        const featureMultiLineString = turf.multiLineString(addedFeature.features.map((feature) => {
+            return feature.geometry.coordinates
+        }))
+        const featureLineStrings = convertMultiLineStringToLineStrings(featureMultiLineString)
+
+        // 겹치는 grid
+        let intersectGridCount = 0;
+        // 유효한 grid
+        let validGridCount = 0;
+
+        // room polygon 생성
+        const boundsPolygon = turf.polygon([[
+            [bounds.getWest(), bounds.getSouth()],
+            [bounds.getWest(), bounds.getNorth()],
+            [bounds.getEast(), bounds.getNorth()],
+            [bounds.getEast(), bounds.getSouth()],
+            [bounds.getWest(), bounds.getSouth()],
+        ]]);
+
         gridLayer.eachLayer((grid) => {
-            const gridBounds = grid.getBounds();
-            const gridPolygon = turf.polygon([
-                [
-                    [gridBounds.getWest(), gridBounds.getSouth()],
-                    [gridBounds.getWest(), gridBounds.getNorth()],
-                    [gridBounds.getEast(), gridBounds.getNorth()],
-                    [gridBounds.getEast(), gridBounds.getSouth()],
-                    [gridBounds.getWest(), gridBounds.getSouth()],
-                ],
-            ]);
+            const gridPolygon = getGridPolygon(grid)
 
-            outerLineStrings.forEach((lineString) => {
+            featureLineStrings.forEach((lineString) => {
+                const isInside = turf.booleanContains(boundsPolygon, lineString)
                 const intersect = turf.lineIntersect(lineString, gridPolygon);
-                if (intersect.features.length > 0) {
-                    grid.setStyle(disabledGridStyle);
-                }
-            });
 
-            innerLineStrings.forEach((lineString) => {
-                const intersect = turf.lineIntersect(lineString, gridPolygon);
                 if (intersect.features.length > 0) {
-                    grid.setStyle(disabledGridStyle);
+                    intersectGridCount++
+                    if (isInside && grid.options.color === 'green') {
+                        validGridCount++
+                    }
                 }
-            });
+            })
+        })
+        if (intersectGridCount !== 0 && intersectGridCount === validGridCount) {
+            setItemFeatureCollections([...itemFeatureCollections, addedFeature])
+            setPlacedItem([...placedItem, addedFeature])
+        } else {
+            alert('배치할 수 없습니다.')
+        }
 
-            /*
-            if (intersect.features.length > 0) {
-                grid.setStyle(disabledGridStyle);
-            }
-            */
-        });
+        setAddedFeature(null)
+    }, [addedFeature]);
+
+
+    useEffect(() => {
+        if (!gridLayer || !placedItem) return;
+
+        placedItem.forEach(featureCollection => {
+            const featureMultiLineString = turf.multiLineString(featureCollection.features.map((feature) => {
+                return feature.geometry.coordinates;
+            }))
+            const featureLineStrings = convertMultiLineStringToLineStrings(featureMultiLineString)
+
+            gridLayer.eachLayer((grid) => {
+                const gridPolygon = getGridPolygon(grid)
+                checkInterSectionAndSetStyle(grid, gridPolygon, featureLineStrings)
+            })
+        })
 
         const handleGlobalEditModeToggle = () => {
             gridLayer.pm.disable();
@@ -116,7 +175,7 @@ const GridLayer = ({ layer, outer, inner }) => {
             map.removeLayer(gridLayer);
         };
 
-    }, [outer, inner, bounds, map]);
+    }, [gridLayer, placedItem]);
 
     return null;
 };

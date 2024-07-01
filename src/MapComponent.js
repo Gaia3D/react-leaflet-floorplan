@@ -2,6 +2,7 @@ import React from 'react';
 import {MapContainer, TileLayer} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import Map from './Map';
+import RightPanel from "./RightPanel";
 
 const MAP_SETTINGS = {
     center: [35.51992, 129.432798],
@@ -9,25 +10,29 @@ const MAP_SETTINGS = {
     minZoom: 0,
     maxZoom: 25,
     tileLayerUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    style: { height: '100vh', width: '100%', backgroundColor: '#ddd' }
+    style: {height: '100vh', width: '100%', backgroundColor: '#ddd'}
 };
 
 function MapComponent() {
 
     return (
-        <MapContainer
-            center={MAP_SETTINGS.center}
-            zoom={MAP_SETTINGS.zoom}
-            style={MAP_SETTINGS.style}
-            minZoom={MAP_SETTINGS.minZoom}
-            maxZoom={MAP_SETTINGS.maxZoom}
-        >
-            <TileLayer
-                url={MAP_SETTINGS.tileLayerUrl}
+        <>
+            <MapContainer
+                center={MAP_SETTINGS.center}
+                zoom={MAP_SETTINGS.zoom}
+                style={MAP_SETTINGS.style}
+                minZoom={MAP_SETTINGS.minZoom}
                 maxZoom={MAP_SETTINGS.maxZoom}
-            />
-            <Map />
-        </MapContainer>
+            >
+                <TileLayer
+                    url={MAP_SETTINGS.tileLayerUrl}
+                    maxZoom={MAP_SETTINGS.maxZoom}
+                />
+                <Map/>
+            </MapContainer>
+            <RightPanel/>
+        </>
+
     );
 }
 

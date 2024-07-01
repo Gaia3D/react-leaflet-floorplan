@@ -9,12 +9,17 @@ import {
 import "@geoman-io/leaflet-geoman-free";
 import React, {useEffect, useState} from "react";
 import './Map.css';
-import RightPanel from "./RightPanel";
 import GridLayer from "./GridLayer";
 import SnapToGrid from "./SnapToGrid";
 import ActiveLayerPanel from "./ActiveLayer";
 import L from 'leaflet';
 import ReactDOM from 'react-dom/client';
+import {useRecoilState, useRecoilValue, useSetRecoilState} from "recoil";
+import {
+    roomFeatureCollectionsState,
+    selectedItemState,
+    itemFeatureCollectionsState, placedItemState, statusBoardState
+} from "./recoil/common";
 
 // LAYER STYLES
 const footprintStyle = {
@@ -57,7 +62,7 @@ const L1walls = [[[0, 0],   /*perimeter*/ [50.5, 0], [50.5, 17], [31, 17], [31, 
 const L1footprint = [[0, 0], [50.5, 0], [50.5, 17], [31, 17], [31, 19], [12, 19], [12, 17], [8, 17], [4, 17], [4, 13], [0, 13],];
 const L1livingroom = [
     [0, 0],
-    [14,  0],
+    [14, 0],
     [14, 13],
     [0, 13]
 ];
@@ -68,7 +73,7 @@ const L1closet = [
     [12, 13]
 ];
 const L1kitchen = [
-    [14,  0],
+    [14, 0],
     [14, 13],
     [28, 13],
     [28, 0]
@@ -160,7 +165,7 @@ const L1Dataset = [
 ];
 
 const L2fixture = [[[31, 3], /*Stairs*/ [28, 3]], [[31, 4], [28, 4]], [[31, 5], [28, 5]], [[31, 6], [28, 6]], [[31, 7], [28, 7]], [[31, 8], [28, 8]], [[31, 9], [28, 9]], [[28, 0], [28, 3]], [[27, 0], [27, 3]], [[26, 0], [26, 3]], [[25, 0], [25, 3]], [[24, 0], [24, 3]], [[50, 0], /*masterbath*/ [50, 5]], [[46.25, 0.25], /*toilet*/ [48.25, 0.25], [48.25, 1.25], [46.25, 1.25], [46.25, 0.25]], [[47.75, 1.25], [47.75, 2.5], [46.75, 2.5], [46.75, 1.25], [47.75, 1.25]], [[46, 2], /*vanity*/ [39, 2]], [[45.75, 0.5], [45.75, 1.5], [43.75, 1.5], [43.75, 0.5], [45.75, 0.5]], [[41.25, 0.5], [41.25, 1.5], [39.25, 1.5], [39.25, 0.5], [41.25, 0.5]], [[18, 6], /*bathroom*/ [15.5, 6], [15.5, 8]], [[13, 3], [13, 8]], [[12.5, 3.5], [12.5, 7.5], [10.5, 7.5], [10.5, 3.5], [12.5, 3.5]], [[17.75, 6.5], [17.75, 7.5], [15.75, 7.5], [15.75, 6.5], [17.75, 6.5]], [[15.25, 6.5], [15.25, 7.5], [13.25, 7.5], [13.25, 6.5], [15.25, 6.5]], [[14.75, 6.5], [14.75, 5], [13.75, 5], [13.75, 6.5], [14.75, 6.5]],];
-const L2walls = [[[0,  0], /*perimeter*/ [52,  0], [52, 17], [31, 17], [31, 19], [12, 19], [12, 17], [8, 17], [3, 17], [3, 13], [0, 13], [0, 0]], [[3,  13], /*greencloset*/ [3,  12], [3.25, 12]], [[10,  17], [10,  12], [5.25, 12]], [[10,  12], /*greenroom*/ [10,  3], [13, 3], [13, 2.75]], [[31,  0], [31,  13]], [[31, 9], /*stairs*/ [28, 9], [28, 3], [24, 3]], [[13, 3], /*bathroom*/ [14.75, 3]], [[16.75, 3], [18, 3], [18, 8], [10, 8]], [[12, 17], /*bluecloset*/ [12, 15]], [[12, 10], [12, 8]], [[18, 3], /*hallcloset*/ [20, 3], [20, 4]], [[20, 7], [20, 8], [18, 8]], [[20, 8], [21, 9.25]], /*blueroom*/ [[23, 11.75], [24, 13], [24, 19]], [[31, 13], [31.5, 13]], [[33.5, 13], [36, 13], [36, 14]], [[36, 16.5], [36, 17]], [[36, 13], /*master*/ [36, 5], [40, 5]], [[39, 0], /*mastercloset*/ [39, 2.5]], [[39, 4.5], [39, 5]], [[36, 5], [31, 5]], [[36, 7], [31, 7]], [[46, 0], /*masterbath*/ [46, 2.5]], [[46, 4.5], [46, 5]], [[52, 5], [45, 5]],];
+const L2walls = [[[0, 0], /*perimeter*/ [52, 0], [52, 17], [31, 17], [31, 19], [12, 19], [12, 17], [8, 17], [3, 17], [3, 13], [0, 13], [0, 0]], [[3, 13], /*greencloset*/ [3, 12], [3.25, 12]], [[10, 17], [10, 12], [5.25, 12]], [[10, 12], /*greenroom*/ [10, 3], [13, 3], [13, 2.75]], [[31, 0], [31, 13]], [[31, 9], /*stairs*/ [28, 9], [28, 3], [24, 3]], [[13, 3], /*bathroom*/ [14.75, 3]], [[16.75, 3], [18, 3], [18, 8], [10, 8]], [[12, 17], /*bluecloset*/ [12, 15]], [[12, 10], [12, 8]], [[18, 3], /*hallcloset*/ [20, 3], [20, 4]], [[20, 7], [20, 8], [18, 8]], [[20, 8], [21, 9.25]], /*blueroom*/ [[23, 11.75], [24, 13], [24, 19]], [[31, 13], [31.5, 13]], [[33.5, 13], [36, 13], [36, 14]], [[36, 16.5], [36, 17]], [[36, 13], /*master*/ [36, 5], [40, 5]], [[39, 0], /*mastercloset*/ [39, 2.5]], [[39, 4.5], [39, 5]], [[36, 5], [31, 5]], [[36, 7], [31, 7]], [[46, 0], /*masterbath*/ [46, 2.5]], [[46, 4.5], [46, 5]], [[52, 5], [45, 5]],];
 
 const L2Dataset = [
     {
@@ -199,7 +204,7 @@ const polygonEvent = (map, dataset) => {
     }
 }
 
-const roomPolygonEvent = (map, setIsSelectedRoom, setSelectedFeature) => {
+const roomPolygonEvent = (map, setSelectedFeature) => {
     return {
         mouseover: (e) => {
             e.target.setStyle(highlight);
@@ -209,20 +214,20 @@ const roomPolygonEvent = (map, setIsSelectedRoom, setSelectedFeature) => {
         },
         click: (e) => {
             map.fitBounds(e.target.getBounds());
-            setIsSelectedRoom(true);
             setSelectedFeature(e.target);
         }
     }
 }
 
-const CustomPopup = ({ feature, currentFeatures, setFeatures, map }) => {
-
+const CustomPopup = ({feature, currentFeatures, setFeatures, map}) => {
     const [name, setName] = useState('');
     const handleChange = (e) => {
         setName(e.target.value);
     }
+
     const handleButtonClick = () => {
         let json = feature.toGeoJSON();
+
         json.properties.title = name;
         currentFeatures.push(json);
         setFeatures([...currentFeatures]);
@@ -241,15 +246,27 @@ const CustomPopup = ({ feature, currentFeatures, setFeatures, map }) => {
 }
 
 function Map() {
-
     const map = useMap();
-    const [activeLayer, setActiveLayer] = useState('L1');
-    const [isSelectedRoom, setIsSelectedRoom ] = useState(false);
+    // 레이어 선택
+    const [activeLayer, setActiveLayer] = useState('office');
+
     const [wallOuterData, setWallOuterData] = useState(null);
     const [wallInnerData, setWalInnerData] = useState(null);
-    const [selectedItem, setSelectedItem] = useState(null);
-    const [features, setFeatures] = useState([]);
-    const [selectedFeature, setSelectedFeature] = useState(null);
+
+    // room 배열
+    const [roomFeatureCollections, setRoomFeatureCollections] = useRecoilState(roomFeatureCollectionsState)
+    // 선택된 room
+    const [selectedRoomFeature, setSelectedRoomFeature] = useState()
+
+    // 선택된 아이템
+    const selectedItem = useRecoilValue(selectedItemState)
+    // 추가된 아이템
+    const itemFeatureCollections = useRecoilValue(itemFeatureCollectionsState)
+    // 현재 지도에 배치된 아이템
+    const setPlacedItem = useSetRecoilState(placedItemState)
+    // 현황판
+    const [statusBoard, setStatusBoard] = useRecoilState(statusBoardState)
+
 
     useEffect(() => {
         map.pm.addControls();
@@ -262,19 +279,23 @@ function Map() {
 
         const updateFeatures = (e) => {
             const layer = e.layer;
-            //currentFeatures.push(layer.toGeoJSON());
-            //setFeatures([...currentFeatures]);
+            currentFeatures.push(layer.toGeoJSON());
+
+            setRoomFeatureCollections([...currentFeatures]);
 
             const popupNode = document.createElement('div');
             const root = ReactDOM.createRoot(popupNode);
-            root.render(<CustomPopup feature={layer} currentFeatures={currentFeatures} setFeatures={setFeatures} map={map} />);
+            root.render(<CustomPopup feature={layer} currentFeatures={currentFeatures}
+                                     setFeatures={setRoomFeatureCollections} map={map}/>);
 
             // const root = createRoot(popupNode);
             // root.render(<PopupContent feature={layer} />);
             layer.bindPopup(popupNode).openPopup();
         }
 
-        map.on('pm:create', updateFeatures);
+        map.on('pm:create', (e) => {
+            updateFeatures(e)
+        });
 
         // 컴포넌트가 언마운트 될 때 이벤트 리스너 제거
         return () => {
@@ -282,6 +303,79 @@ function Map() {
         };
 
     }, [map]);
+
+    // room 추가시 현황판 업데이트
+    useEffect(() => {
+        if (roomFeatureCollections.length > 0) {
+            const newRooms = roomFeatureCollections.map((feature) => {
+                const featureTitle = feature.properties.title;
+                if (featureTitle) {
+                    return {
+                        room: featureTitle,
+                        printerCount: 0,
+                        deskCount: 0,
+                        chiffonierCount: 0,
+                    };
+                }
+                return null;
+            }).filter(room => room !== null);
+
+            setStatusBoard(prevStatusBoard => {
+                const updatedStatusBoard = [...prevStatusBoard];
+                newRooms.forEach(newRoom => {
+                    const existingRoom = updatedStatusBoard.find(room => room.room === newRoom.room);
+                    if (!existingRoom) {
+                        updatedStatusBoard.push(newRoom);
+                    }
+                });
+                return updatedStatusBoard;
+            });
+        }
+    }, [roomFeatureCollections]);
+
+    // 전체 feature 변경시 status board 업데이트
+    useEffect(() => {
+        const updatedStatusBoard = statusBoard.map(room => {
+            const targetRoom = room.room;
+            const newRoomState = {...room, printerCount: 0, deskCount: 0, chiffonierCount: 0};
+
+            itemFeatureCollections.forEach(featureCollection => {
+                if (featureCollection.room === targetRoom) {
+                    const nowItem = featureCollection.name;
+                    if (nowItem === "printer") {
+                        newRoomState.printerCount++;
+                    } else if (nowItem === "desk") {
+                        newRoomState.deskCount++;
+                    } else if (nowItem === "chiffonier") {
+                        newRoomState.chiffonierCount++;
+                    }
+                }
+            });
+
+            return newRoomState;
+        });
+
+        setStatusBoard(updatedStatusBoard);
+
+    }, [itemFeatureCollections]);
+
+    // 방 변경시 placedItem 업데이트
+    useEffect(() => {
+        if (selectedRoomFeature) {
+            const nowRoom = selectedRoomFeature.options.children.props.children
+            let tempPlacedItems = []
+            itemFeatureCollections.forEach(featureCollection => {
+                if (featureCollection.room === nowRoom) {
+                    tempPlacedItems.push(featureCollection)
+                }
+            })
+            setPlacedItem(tempPlacedItems)
+        } else {
+            setPlacedItem([])
+        }
+
+    }, [selectedRoomFeature]);
+
 
     useEffect(() => {
         if (activeLayer === 'office' && wallOuterData && wallInnerData) {
@@ -296,7 +390,7 @@ function Map() {
             wallOuterLayer.pm.disable(); // Disable editing
             const handleGlobalEditModeToggle = () => {
                 wallOuterLayer.pm.disable();
-                wallInnerLayer.pm.enable({ snappable: true });
+                wallInnerLayer.pm.enable({snappable: true});
             };
 
             const onDrag = (e, layer) => {
@@ -334,14 +428,14 @@ function Map() {
         <LayerGroup>
             {dataset.map((data, idx) => {
                 if (data.type === 'polygon') {
-                        return (<Polygon
-                            key={idx}
-                            positions={data.data}
-                            pathOptions={data.style}
-                            eventHandlers={polygonEvent(map, data)}
-                        >
-                            <Tooltip {...tooltipOptions}>{data.title}</Tooltip>
-                        </Polygon>)
+                    return (<Polygon
+                        key={idx}
+                        positions={data.data}
+                        pathOptions={data.style}
+                        eventHandlers={polygonEvent(map, data)}
+                    >
+                        <Tooltip {...tooltipOptions}>{data.title}</Tooltip>
+                    </Polygon>)
 
                 } else {
                     return (<Polyline
@@ -358,24 +452,25 @@ function Map() {
         <>
             {activeLayer === 'L1' && renderLayerGroup(L1Dataset)}
             {activeLayer === 'L2' && renderLayerGroup(L2Dataset)}
-            {isSelectedRoom && <GridLayer layer={selectedFeature} outer={wallOuterData} inner={wallInnerData} />}
-            <ActiveLayerPanel activeLayer={activeLayer} setActiveLayer={setActiveLayer} />
-            <RightPanel selectedItem={selectedItem} setSelectedItem={setSelectedItem} />
+            {selectedRoomFeature &&
+                <GridLayer layer={selectedRoomFeature} outer={wallOuterData} inner={wallInnerData}/>}
+            <ActiveLayerPanel activeLayer={activeLayer} setActiveLayer={setActiveLayer}/>
             {
-                selectedItem && selectedFeature &&
-                <SnapToGrid selectedItem={selectedItem} layer={selectedFeature} />
+                selectedItem && selectedRoomFeature &&
+                <SnapToGrid selectedItem={selectedItem} layer={selectedRoomFeature}
+                            nowSelectedRoomFeature={selectedRoomFeature}/>
             }
             {
-                features.length > 0 && (
+                roomFeatureCollections.length > 0 && (
                     <FeatureGroup>
-                        {features.map((feature, index) => {
+                        {roomFeatureCollections.map((feature, index) => {
                             if (feature.geometry.type === "Polygon") {
                                 const positions = feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
                                 return <Polygon
                                     key={index}
                                     positions={positions}
                                     pathOptions={roomStyle}
-                                    eventHandlers={roomPolygonEvent(map, setIsSelectedRoom, setSelectedFeature)}
+                                    eventHandlers={roomPolygonEvent(map, setSelectedRoomFeature)}
                                 >
                                     <Tooltip {...tooltipOptions}>{feature.properties.title}</Tooltip>
                                 </Polygon>;
@@ -390,4 +485,3 @@ function Map() {
 }
 
 export default Map;
-
