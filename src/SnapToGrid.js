@@ -24,7 +24,7 @@ const calculateMarkerSize = (zoom, item) => {
     return baseSize;
 };
 
-const calculateIconSizeAndAnchor = (zoom, selectedItem) => {
+const getMarkerIcon = (zoom, selectedItem) => {
     const markerSize = calculateMarkerSize(zoom, selectedItem);
     let iconSize = [markerSize * 1.6, markerSize]
     let iconAnchor = [0, markerSize]
@@ -34,8 +34,14 @@ const calculateIconSizeAndAnchor = (zoom, selectedItem) => {
         iconAnchor = [0, markerSize * 1.6];
     }
 
-    return {iconSize, iconAnchor};
-};
+    const markerIcon = L.icon({
+        iconUrl: `http://localhost:3000/${selectedItem}.png`,
+        iconSize: iconSize,
+        iconAnchor: iconAnchor,
+    })
+
+    return markerIcon;
+}
 
 const SnapToGrid = ({
                         selectedItem,
@@ -63,19 +69,14 @@ const SnapToGrid = ({
         const latStep = gridSize / 111320; // 1미터 간격 (위도)
         const lngStep = gridSize / (40075000 * Math.cos((bounds.getNorth() + bounds.getSouth()) / 2 * Math.PI / 180) / 360); // 1미터 간격 (경도)
 
-        const zoom = map.getZoom();
-        const {iconSize, iconAnchor} = calculateIconSizeAndAnchor(zoom, selectedItem)
-        const markerIcon = L.icon({
-            iconUrl: `http://localhost:3000/${selectedItem}.png`,
-            iconSize: iconSize,
-            iconAnchor: iconAnchor,
-        })
-
         const onMouseMove = (e) => {
             const {lat, lng} = e.latlng;
 
             const snappedLat = Math.round(lat / latStep) * latStep;
             const snappedLng = Math.round(lng / lngStep) * lngStep;
+
+            const zoom = map.getZoom()
+            const markerIcon = getMarkerIcon(zoom, selectedItem)
 
             if (tempMarker) {
                 tempMarker.setLatLng([snappedLat, snappedLng]);
@@ -92,7 +93,9 @@ const SnapToGrid = ({
         };
 
         const onZoomEnd = (e) => {
+            const zoom = e.target.getZoom();
             if (tempMarker) {
+                const markerIcon = getMarkerIcon(zoom, selectedItem)
                 tempMarker.setIcon(markerIcon)
             }
         }

@@ -20,6 +20,7 @@ import {
     selectedItemState,
     itemFeatureCollectionsState, placedItemState, statusBoardState
 } from "./recoil/common";
+import CustomPopup from "./CustomPopup";
 
 // LAYER STYLES
 const footprintStyle = {
@@ -219,32 +220,6 @@ const roomPolygonEvent = (map, setSelectedFeature) => {
     }
 }
 
-const CustomPopup = ({feature, currentFeatures, setFeatures, map}) => {
-    const [name, setName] = useState('');
-    const handleChange = (e) => {
-        setName(e.target.value);
-    }
-
-    const handleButtonClick = () => {
-        let json = feature.toGeoJSON();
-
-        json.properties.title = name;
-        currentFeatures.push(json);
-        setFeatures([...currentFeatures]);
-        map.removeLayer(feature);
-    };
-
-    return (
-        <div>
-            <h2>Feature Info</h2>
-            <p>{feature && feature.pm._shape}</p>
-            <p>Coordinates: {feature && (feature.getLatLngs ? feature.getLatLngs().toString() : feature.getLatLng().toString())}</p>
-            <input type="text" name="name" value={name} onChange={handleChange}/>
-            <button type="button" onClick={handleButtonClick}>저장</button>
-        </div>
-    );
-}
-
 function Map() {
     const map = useMap();
     // 레이어 선택
@@ -254,19 +229,20 @@ function Map() {
     const [wallInnerData, setWalInnerData] = useState(null);
 
     // room 배열
-    const [roomFeatureCollections, setRoomFeatureCollections] = useRecoilState(roomFeatureCollectionsState)
+    const [roomFeatureCollections, setRoomFeatureCollections] = useRecoilState(roomFeatureCollectionsState);
     // 선택된 room
-    const [selectedRoomFeature, setSelectedRoomFeature] = useState()
+    const [selectedRoomFeature, setSelectedRoomFeature] = useState();
 
     // 선택된 아이템
-    const selectedItem = useRecoilValue(selectedItemState)
+    const selectedItem = useRecoilValue(selectedItemState);
     // 추가된 아이템
-    const itemFeatureCollections = useRecoilValue(itemFeatureCollectionsState)
+    const itemFeatureCollections = useRecoilValue(itemFeatureCollectionsState);
     // 현재 지도에 배치된 아이템
-    const setPlacedItem = useSetRecoilState(placedItemState)
+    const setPlacedItem = useSetRecoilState(placedItemState);
     // 현황판
-    const [statusBoard, setStatusBoard] = useRecoilState(statusBoardState)
+    const [statusBoard, setStatusBoard] = useRecoilState(statusBoardState);
 
+    const [currentFeatures, setCurrentFeatures] = useState([])
 
     useEffect(() => {
         map.pm.addControls();
@@ -275,17 +251,18 @@ function Map() {
         fetchGeoJsonData('http://localhost:3000/wall_outer.geojson', setWallOuterData);
         fetchGeoJsonData('http://localhost:3000/wall_inner.geojson', setWalInnerData);
 
-        let currentFeatures = [];
-
         const updateFeatures = (e) => {
             const layer = e.layer;
-            currentFeatures.push(layer.toGeoJSON());
 
-            setRoomFeatureCollections([...currentFeatures]);
+            const tempCurrentFeatures = currentFeatures
+            tempCurrentFeatures.push(layer.toGeoJSON());
+            setCurrentFeatures(tempCurrentFeatures)
+
+            setRoomFeatureCollections([...tempCurrentFeatures]);
 
             const popupNode = document.createElement('div');
             const root = ReactDOM.createRoot(popupNode);
-            root.render(<CustomPopup feature={layer} currentFeatures={currentFeatures}
+            root.render(<CustomPopup feature={layer} currentFeatures={tempCurrentFeatures}
                                      setFeatures={setRoomFeatureCollections} map={map}/>);
 
             // const root = createRoot(popupNode);
@@ -306,57 +283,58 @@ function Map() {
 
     // room 추가시 현황판 업데이트
     useEffect(() => {
-        if (roomFeatureCollections.length > 0) {
-            const newRooms = roomFeatureCollections.map((feature) => {
-                const featureTitle = feature.properties.title;
-                if (featureTitle) {
-                    return {
-                        room: featureTitle,
-                        printerCount: 0,
-                        deskCount: 0,
-                        chiffonierCount: 0,
-                    };
-                }
-                return null;
-            }).filter(room => room !== null);
+        if (roomFeatureCollections.length <= 0) return;
 
-            setStatusBoard(prevStatusBoard => {
-                const updatedStatusBoard = [...prevStatusBoard];
-                newRooms.forEach(newRoom => {
-                    const existingRoom = updatedStatusBoard.find(room => room.room === newRoom.room);
-                    if (!existingRoom) {
-                        updatedStatusBoard.push(newRoom);
-                    }
-                });
-                return updatedStatusBoard;
+        const newRooms = roomFeatureCollections
+            .filter((feature) => feature.properties?.title !== undefined)
+            .map(feature => {
+                return {
+                    room: feature.properties?.title,
+                    printerCount: 0,
+                    deskCount: 0,
+                    chiffonierCount: 0,
+                };
             });
-        }
+
+        setStatusBoard(prevStatusBoard => {
+            const existingRoomSet = new Set(prevStatusBoard.map(room => room.room));
+            const updatedStatusBoard = [...prevStatusBoard]
+
+            newRooms.length > 0 && newRooms.forEach(newRoom => {
+                if (!existingRoomSet.has(newRoom.room)) {
+                    existingRoomSet.add(newRoom.room);
+                    updatedStatusBoard.push(newRoom)
+                }
+            });
+
+            return updatedStatusBoard
+        });
+
     }, [roomFeatureCollections]);
+
 
     // 전체 feature 변경시 status board 업데이트
     useEffect(() => {
-        const updatedStatusBoard = statusBoard.map(room => {
-            const targetRoom = room.room;
-            const newRoomState = {...room, printerCount: 0, deskCount: 0, chiffonierCount: 0};
+        if (itemFeatureCollections.length <= 0) return;
 
-            itemFeatureCollections.forEach(featureCollection => {
-                if (featureCollection.room === targetRoom) {
-                    const nowItem = featureCollection.name;
-                    if (nowItem === "printer") {
-                        newRoomState.printerCount++;
-                    } else if (nowItem === "desk") {
-                        newRoomState.deskCount++;
-                    } else if (nowItem === "chiffonier") {
-                        newRoomState.chiffonierCount++;
+        setStatusBoard(prevStatusBoard => {
+            return prevStatusBoard.map(board => {
+                const targetRoom = board.room;
+
+                return itemFeatureCollections.reduce((acc, featureCollection) => {
+                    if (featureCollection.room === targetRoom) {
+                        if (featureCollection.name === "printer") {
+                            acc.printerCount++;
+                        } else if (featureCollection.name === "desk") {
+                            acc.deskCount++;
+                        } else if (featureCollection.name === "chiffonier") {
+                            acc.chiffonierCount++;
+                        }
                     }
-                }
+                    return acc;
+                }, {...board, printerCount: 0, deskCount: 0, chiffonierCount: 0});
             });
-
-            return newRoomState;
         });
-
-        setStatusBoard(updatedStatusBoard);
-
     }, [itemFeatureCollections]);
 
     // 방 변경시 placedItem 업데이트
