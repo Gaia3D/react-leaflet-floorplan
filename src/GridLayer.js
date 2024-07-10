@@ -63,10 +63,13 @@ const GridLayer = ({layer, outer, inner}) => {
     const [addedFeature, setAddedFeature] = useRecoilState(addedFeatureState)
     const [placedItem, setPlacedItem] = useRecoilState(placedItemState)
 
-
     // grid 생성, 외벽 내벽 intersect
     useEffect(() => {
         if (!bounds) return;
+
+        if (gridLayer) {
+            map.removeLayer(gridLayer)
+        }
 
         const gridSize = 1;
         const newGridLayer = createGrid(gridSize, bounds);
@@ -93,11 +96,21 @@ const GridLayer = ({layer, outer, inner}) => {
 
         setGridLayer(newGridLayer);
 
+        const handleGlobalEditModeToggle = () => {
+            if (gridLayer) {
+                gridLayer.pm.disable();
+            }
+        };
+        map.on('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
+
         return () => {
-            map.removeLayer(newGridLayer)
+            if (gridLayer) {
+                map.removeLayer(gridLayer);
+            }
+            map.off('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
         }
 
-    }, [outer, inner, bounds]);
+    }, [layer]);
 
 
     // feature 추가될 때 마다 검증, 추가
@@ -146,7 +159,7 @@ const GridLayer = ({layer, outer, inner}) => {
         }
 
         setAddedFeature(null)
-    }, [addedFeature]);
+    }, [gridLayer, addedFeature]);
 
 
     useEffect(() => {
@@ -163,17 +176,6 @@ const GridLayer = ({layer, outer, inner}) => {
                 checkInterSectionAndSetStyle(grid, gridPolygon, featureLineStrings)
             })
         })
-
-        const handleGlobalEditModeToggle = () => {
-            gridLayer.pm.disable();
-        };
-
-        map.on('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
-
-        return () => {
-            map.off('pm:globaleditmodetoggled', handleGlobalEditModeToggle);
-            map.removeLayer(gridLayer);
-        };
 
     }, [gridLayer, placedItem]);
 

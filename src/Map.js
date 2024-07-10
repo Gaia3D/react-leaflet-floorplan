@@ -240,7 +240,7 @@ function Map() {
     // 현재 지도에 배치된 아이템
     const setPlacedItem = useSetRecoilState(placedItemState);
     // 현황판
-    const [statusBoard, setStatusBoard] = useRecoilState(statusBoardState);
+    const setStatusBoard = useSetRecoilState(statusBoardState);
 
     const [currentFeatures, setCurrentFeatures] = useState([])
 

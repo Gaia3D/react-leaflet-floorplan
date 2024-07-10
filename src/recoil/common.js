@@ -9,7 +9,7 @@ export const selectedItemState = atom({
 // 추가된 Feature
 export const addedFeatureState = atom({
     key: 'addedFeatureState',
-    default: {},
+    default: null,
 })
 
 // 지도에 배치된 아이템
